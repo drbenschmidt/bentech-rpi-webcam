@@ -1,0 +1,63 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.27130.2027
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RaspberryPi.Camera", "RaspberryPi.Camera.csproj", "{CA6562C7-DB74-4823-B9CE-61D089315D8E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RespberryPi.Camera.Tests", "..\RespberryPi.Camera.Tests\RespberryPi.Camera.Tests.csproj", "{F461270B-4D3C-4E7F-B337-C7630E6A340F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|ARM = Debug|ARM
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|ARM = Release|ARM
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{CA6562C7-DB74-4823-B9CE-61D089315D8E}.Debug|ARM.ActiveCfg = Debug|ARM
+		{CA6562C7-DB74-4823-B9CE-61D089315D8E}.Debug|ARM.Build.0 = Debug|ARM
+		{CA6562C7-DB74-4823-B9CE-61D089315D8E}.Debug|ARM.Deploy.0 = Debug|ARM
+		{CA6562C7-DB74-4823-B9CE-61D089315D8E}.Debug|x64.ActiveCfg = Debug|x64
+		{CA6562C7-DB74-4823-B9CE-61D089315D8E}.Debug|x64.Build.0 = Debug|x64
+		{CA6562C7-DB74-4823-B9CE-61D089315D8E}.Debug|x64.Deploy.0 = Debug|x64
+		{CA6562C7-DB74-4823-B9CE-61D089315D8E}.Debug|x86.ActiveCfg = Debug|x86
+		{CA6562C7-DB74-4823-B9CE-61D089315D8E}.Debug|x86.Build.0 = Debug|x86
+		{CA6562C7-DB74-4823-B9CE-61D089315D8E}.Debug|x86.Deploy.0 = Debug|x86
+		{CA6562C7-DB74-4823-B9CE-61D089315D8E}.Release|ARM.ActiveCfg = Release|ARM
+		{CA6562C7-DB74-4823-B9CE-61D089315D8E}.Release|ARM.Build.0 = Release|ARM
+		{CA6562C7-DB74-4823-B9CE-61D089315D8E}.Release|ARM.Deploy.0 = Release|ARM
+		{CA6562C7-DB74-4823-B9CE-61D089315D8E}.Release|x64.ActiveCfg = Release|x64
+		{CA6562C7-DB74-4823-B9CE-61D089315D8E}.Release|x64.Build.0 = Release|x64
+		{CA6562C7-DB74-4823-B9CE-61D089315D8E}.Release|x64.Deploy.0 = Release|x64
+		{CA6562C7-DB74-4823-B9CE-61D089315D8E}.Release|x86.ActiveCfg = Release|x86
+		{CA6562C7-DB74-4823-B9CE-61D089315D8E}.Release|x86.Build.0 = Release|x86
+		{CA6562C7-DB74-4823-B9CE-61D089315D8E}.Release|x86.Deploy.0 = Release|x86
+		{F461270B-4D3C-4E7F-B337-C7630E6A340F}.Debug|ARM.ActiveCfg = Debug|ARM
+		{F461270B-4D3C-4E7F-B337-C7630E6A340F}.Debug|ARM.Build.0 = Debug|ARM
+		{F461270B-4D3C-4E7F-B337-C7630E6A340F}.Debug|ARM.Deploy.0 = Debug|ARM
+		{F461270B-4D3C-4E7F-B337-C7630E6A340F}.Debug|x64.ActiveCfg = Debug|x64
+		{F461270B-4D3C-4E7F-B337-C7630E6A340F}.Debug|x64.Build.0 = Debug|x64
+		{F461270B-4D3C-4E7F-B337-C7630E6A340F}.Debug|x64.Deploy.0 = Debug|x64
+		{F461270B-4D3C-4E7F-B337-C7630E6A340F}.Debug|x86.ActiveCfg = Debug|x86
+		{F461270B-4D3C-4E7F-B337-C7630E6A340F}.Debug|x86.Build.0 = Debug|x86
+		{F461270B-4D3C-4E7F-B337-C7630E6A340F}.Debug|x86.Deploy.0 = Debug|x86
+		{F461270B-4D3C-4E7F-B337-C7630E6A340F}.Release|ARM.ActiveCfg = Release|ARM
+		{F461270B-4D3C-4E7F-B337-C7630E6A340F}.Release|ARM.Build.0 = Release|ARM
+		{F461270B-4D3C-4E7F-B337-C7630E6A340F}.Release|ARM.Deploy.0 = Release|ARM
+		{F461270B-4D3C-4E7F-B337-C7630E6A340F}.Release|x64.ActiveCfg = Release|x64
+		{F461270B-4D3C-4E7F-B337-C7630E6A340F}.Release|x64.Build.0 = Release|x64
+		{F461270B-4D3C-4E7F-B337-C7630E6A340F}.Release|x64.Deploy.0 = Release|x64
+		{F461270B-4D3C-4E7F-B337-C7630E6A340F}.Release|x86.ActiveCfg = Release|x86
+		{F461270B-4D3C-4E7F-B337-C7630E6A340F}.Release|x86.Build.0 = Release|x86
+		{F461270B-4D3C-4E7F-B337-C7630E6A340F}.Release|x86.Deploy.0 = Release|x86
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {B3BA281F-F3CB-4C9D-97EE-CAC5D917D9DF}
+	EndGlobalSection
+EndGlobal
