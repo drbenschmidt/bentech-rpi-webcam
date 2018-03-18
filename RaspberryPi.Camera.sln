@@ -1,11 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
-VisualStudioVersion = 15.0.27130.2027
+VisualStudioVersion = 15.0.27130.2036
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RaspberryPi.Camera", "RaspberryPi.Camera.csproj", "{CA6562C7-DB74-4823-B9CE-61D089315D8E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RaspberryPi.Camera", "RaspberryPi.Camera\RaspberryPi.Camera.csproj", "{CA6562C7-DB74-4823-B9CE-61D089315D8E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RespberryPi.Camera.Tests", "..\RespberryPi.Camera.Tests\RespberryPi.Camera.Tests.csproj", "{F461270B-4D3C-4E7F-B337-C7630E6A340F}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RespberryPi.Camera.Tests", "RespberryPi.Camera.Tests\RespberryPi.Camera.Tests.csproj", "{F461270B-4D3C-4E7F-B337-C7630E6A340F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
