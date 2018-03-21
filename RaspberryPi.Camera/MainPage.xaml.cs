@@ -52,7 +52,7 @@ namespace RaspberryPi.Camera
             Application.Current.Suspending += Application_Suspending;
             Application.Current.UnhandledException += Current_UnhandledException;
 
-            this.Log.Info(() => "App Started");
+            this.Log.Info(() => "App Started", (c) => c.AddVariable("LoggersAdded", this.Log.Loggers.Count().ToString()).AddVariable("TestKey", "TestValue"));
         }
 
         private void Current_UnhandledException(object sender, Windows.UI.Xaml.UnhandledExceptionEventArgs e)
