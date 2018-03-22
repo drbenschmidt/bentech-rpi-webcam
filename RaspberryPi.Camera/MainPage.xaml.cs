@@ -33,9 +33,10 @@ namespace RaspberryPi.Camera
     /// </summary>
     public sealed partial class MainPage : Page
     {
-        private CameraAccess CameraAccess = new CameraAccess();
+        private CameraAccess CameraAccess;
         private Options ConfigOptions;
-        private Logging.LoggingContext Log = new Logging.LoggingContext();
+        private Logging.LogService Log = new Logging.LogService();
+        public HttpServer WebServer { get; private set; }
 
         public MainPage()
         {
@@ -52,6 +53,8 @@ namespace RaspberryPi.Camera
             Application.Current.Suspending += Application_Suspending;
             Application.Current.UnhandledException += Current_UnhandledException;
 
+            this.CameraAccess = new CameraAccess(this.Log);
+
             this.Log.Info(() => "App Started", (c) => c.AddVariable("LoggersAdded", this.Log.Loggers.Count().ToString()).AddVariable("TestKey", "TestValue"));
         }
 
@@ -64,7 +67,7 @@ namespace RaspberryPi.Camera
         {
             this.Log.Trace(() => "OnNavigatedTo Fired");
 
-            await this.InitializeCameraAccess();
+            await this.InitializeCameraAccess().ConfigureAwait(false);
 
             var encodingProfile = MediaEncodingProfile.CreateMp4(VideoEncodingQuality.HD720p);
 
@@ -84,23 +87,43 @@ namespace RaspberryPi.Camera
             );
 
             this.Log.Trace(() => $"Found {formats.Count()} formats.");
-            this.Log.Trace(() => myFormat == null ? "Could not find specified capture properties in formats." : "Found capture format");
+            this.Log.Debug(() => myFormat == null ? "Could not find specified capture properties in formats." : "Found capture format");
 
-            await this.CameraAccess.SetCaptureFormat(myFormat);
+            await this.CameraAccess.SetCaptureFormat(myFormat).ConfigureAwait(false);
             this.CameraAccess.SetEncodingProflie(encodingProfile);
 
-            // TODO: Set better logging steps.
-
-            this.Log.Trace("Starting capture loop...");
+            this.Log.Debug(() => "Starting capture loop...");
             // NOTE: Don't await these.
-            this.VideoCaptureLoop();
+            this.VideoCaptureLoop().ContinueWith((t) =>
+            {
+                if (t.IsCompletedSuccessfully)
+                {
+                    this.Log.Debug(() => "Video Loop started.");
+                }
+                
+                if (t.IsFaulted)
+                {
+                    this.Log.Error(() => "Exception while starting Video Loop", t.Exception);
+                }
+            });
 
-            this.Log.Trace("Starting HttpServer...");
-            this.StartHttpServer();
+            this.Log.Debug(() => "Starting HttpServer...");
+            this.StartHttpServer().ContinueWith((t) =>
+            {
+                if (t.IsCompletedSuccessfully)
+                {
+                    this.Log.Debug(() => "Http Server started.");
+                }
 
-            this.Log.Trace("Starting Video Preview Service...");
+                if (t.IsFaulted)
+                {
+                    this.Log.Error(() => "Exception while starting Http Server.", t.Exception);
+                }
+            });
+
+            this.Log.Debug(() => "Starting Video Preview Service...");
             this.CameraAccess.CameraFrameReader.AcquisitionMode = Windows.Media.Capture.Frames.MediaFrameReaderAcquisitionMode.Realtime;
-            await this.CameraAccess.CameraFrameReader.StartAsync();
+            await this.CameraAccess.CameraFrameReader.StartAsync().AsTask().ConfigureAwait(false);
         }
 
         private async Task VideoCaptureLoop()
@@ -110,129 +133,53 @@ namespace RaspberryPi.Camera
             var storageFolder = Windows.Storage.ApplicationData.Current.LocalFolder;
             var file = await storageFolder.CreateFileAsync(fileName, Windows.Storage.CreationCollisionOption.ReplaceExisting);
 
-            await this.CameraAccess.StartCaptureToFileAsync(file);
+            await this.CameraAccess.StartCaptureToFileAsync(file).ConfigureAwait(false);
 
             // TODO: Make this configurable.
             Task.Delay(30 * 1000)
                 .ContinueWith(async (t) =>
                 {
-                    await this.CameraAccess.StopCapture();
+                    await this.CameraAccess.StopCapture().ConfigureAwait(false);
 
                     // NOTE: Don't await this, we're starting another itteration of capture.
                     this.VideoCaptureLoop();
                 }).ConfigureAwait(false);
         }
 
-        private int CaptureLoopCount;
-
-        public HttpServer WebServer { get; private set; }
-
-        private void StartCaptureLoop()
-        {
-            Task.Delay(2000)
-                .ContinueWith((t) =>
-                {
-                    CaptureLoopCount++;
-                    this.CapturePreview().Wait();
-                    this.StartCaptureLoop();
-                })
-                .ConfigureAwait(false);
-        }
-
-        private async Task CapturePreview()
-        {
-            var storageFolder = Windows.Storage.ApplicationData.Current.LocalFolder;
-            var file2 = await storageFolder.CreateFileAsync($"test{this.CaptureLoopCount}.jpg", Windows.Storage.CreationCollisionOption.ReplaceExisting);
-            try
-            {
-                var jpegSettings = ImageEncodingProperties.CreateJpeg();
-                using (var ras = await file2.OpenAsync(Windows.Storage.FileAccessMode.ReadWrite))
-                {
-                    var propertySet = new Windows.Graphics.Imaging.BitmapPropertySet();
-                    var qualityValue = new Windows.Graphics.Imaging.BitmapTypedValue(
-                        0.6, // Quality percentage.
-                        Windows.Foundation.PropertyType.Single
-                    );
-                    propertySet.Add("ImageQuality", qualityValue);
-
-                    var frameReference = this.CameraAccess.CameraFrameReader.TryAcquireLatestFrame();
-                    var frame = frameReference?.VideoMediaFrame?.SoftwareBitmap;
-
-                    if (frame == null)
-                    {
-                        return;
-                    }
-
-                    using (var bitmap = SoftwareBitmap.Convert(frame, BitmapPixelFormat.Bgra8, BitmapAlphaMode.Ignore))
-                    {
-                        var jpegEncoder = await BitmapEncoder.CreateAsync(BitmapEncoder.JpegEncoderId, ras, propertySet);
-
-                        jpegEncoder.SetSoftwareBitmap(bitmap);
-
-                        jpegEncoder.IsThumbnailGenerated = true;
-
-                        try
-                        {
-                            await jpegEncoder.FlushAsync();
-                        }
-                        catch (Exception err)
-                        {
-                            switch (err.HResult)
-                            {
-                                case unchecked((int)0x88982F81): //WINCODEC_ERR_UNSUPPORTEDOPERATION
-                                                                 // If the encoder does not support writing a thumbnail, then try again
-                                                                 // but disable thumbnail generation.
-                                    jpegEncoder.IsThumbnailGenerated = false;
-                                    break;
-                                default:
-                                    throw err;
-                            }
-                        }
-
-                        if (jpegEncoder.IsThumbnailGenerated == false)
-                        {
-                            await jpegEncoder.FlushAsync();
-                        }
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                await file2.DeleteAsync();
-            }
-        }
-
         private async void Application_Resuming(object sender, object e)
         {
-            await this.InitializeCameraAccess();
+            this.Log.Trace(() => "Application_Resuming fired.");
+            await this.InitializeCameraAccess().ConfigureAwait(false);
         }
 
         private void Application_Suspending(object sender, Windows.ApplicationModel.SuspendingEventArgs e)
         {
+            this.Log.Trace(() => "Application_Suspending fired.");
             this.CameraAccess.Dispose();
         }
 
         protected override void OnNavigatedFrom(NavigationEventArgs e)
         {
+            this.Log.Trace(() => "OnNavigatedFrom fired.");
             this.CameraAccess.Dispose();
         }
 
         private async Task InitializeCameraAccess()
         {
-            var cam = await this.GetCamera();
-            await this.CameraAccess.InitializeCameraAsync(cam);
+            var cam = await this.GetCamera().ConfigureAwait(false);
+            await this.CameraAccess.InitializeCameraAsync(cam).ConfigureAwait(false);
         }
 
         private async Task<DeviceInformation> GetCamera()
         {
-            var defaultCam = await this.CameraAccess.GetDefaultCamera();
+            var defaultCam = await this.CameraAccess.GetDefaultCamera().ConfigureAwait(false);
 
             return defaultCam;
         }
 
         private async Task StartHttpServer()
         {
-            this.WebServer = new HttpServer(9092);
+            this.WebServer = new HttpServer(9092, this.Log);
             this.WebServer.AddRoute(new HttpRoute("/", (context) =>
             {
                 context.Response.HttpCode = 200;
@@ -262,10 +209,5 @@ namespace RaspberryPi.Camera
 
             await this.WebServer.Start().ConfigureAwait(false);
         }
-    }
-
-    public class Response
-    {
-        public string Body { get; set; }
     }
 }

@@ -30,6 +30,15 @@ namespace RaspberryPi.Camera.Logging
         string Format();
     }
 
+    public interface ILogService
+    {
+        void Log(LoggingLevel level, Func<string> messageGenerator, Exception exc = null, Action<ILogContext> extraInfo = null);
+        void Debug(Func<string> messageGenerator, Action<ILogContext> extraInfo = null);
+        void Error(Func<string> messageGenerator, Exception exc, Action<ILogContext> extraInfo = null);
+        void Info(Func<string> messageGenerator, Action<ILogContext> extraInfo = null);
+        void Trace(Func<string> messageGenerator, Action<ILogContext> extraInfo = null);
+    }
+
     public class LogContext : ILogContext
     {
         public Dictionary<string, string> Variables { get; set; } = new Dictionary<string, string>();
@@ -69,11 +78,11 @@ namespace RaspberryPi.Camera.Logging
         }
     }
 
-    public class LoggingContext
+    public class LogService : ILogService
     {
         public List<ILogger> Loggers;
 
-        public LoggingContext()
+        public LogService()
         {
             this.Loggers = new List<ILogger>();
         }

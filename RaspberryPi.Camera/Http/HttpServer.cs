@@ -1,4 +1,5 @@
-﻿using System;
+﻿using RaspberryPi.Camera.Logging;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -286,13 +287,15 @@ namespace RaspberryPi.Camera.Http
     public class HttpServer
     {
         private uint BoundPort;
+        private ILogService Log;
         private StreamSocketListener SocketListener;
         private List<HttpRoute> Routes;
 
-        public HttpServer(uint boundPort)
+        public HttpServer(uint boundPort, ILogService log)
         {
             this.Routes = new List<HttpRoute>();
             this.BoundPort = boundPort;
+            this.Log = log;
 
             this.SocketListener = new StreamSocketListener();
             this.SocketListener.ConnectionReceived += SocketListener_ConnectionReceived;
@@ -341,7 +344,7 @@ namespace RaspberryPi.Camera.Http
             }
             catch (Exception e)
             {
-                // TODO: Log exception.
+                this.Log.Error(() => "Exception in HttpServer.", e);
                 // Write appopriate response.--
             }
             finally

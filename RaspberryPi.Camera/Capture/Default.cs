@@ -1,4 +1,5 @@
-﻿using System;
+﻿using RaspberryPi.Camera.Logging;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -35,6 +36,7 @@ namespace RaspberryPi.Camera.Capture
 
     public class CameraAccess : ICameraAccess
     {
+        public ILogService Log { get; set; }
         public Frame CapturedFrame { get; set; }
         private MediaEncodingProfile EncodingProfile;
 
@@ -42,9 +44,10 @@ namespace RaspberryPi.Camera.Capture
 
         public MediaFrameReader CameraFrameReader { get; set; }
 
-        public CameraAccess()
+        public CameraAccess(ILogService log)
         {
             this.CameraMediaCapture = new MediaCapture();
+            this.Log = log;
         }
 
         public async Task<DeviceInformation> GetDefaultCamera()
@@ -206,11 +209,6 @@ namespace RaspberryPi.Camera.Capture
                             }
                         }
 
-                        //if (jpegEncoder.IsThumbnailGenerated == false)
-                        //{
-                        //    await jpegEncoder.FlushAsync().AsTask().ConfigureAwait(false);
-                        //}
-
                         if (ms.Size > 0)
                         {
                             // TODO: make this more efficient.
@@ -229,7 +227,7 @@ namespace RaspberryPi.Camera.Capture
             }
             catch (Exception e)
             {
-                // Log?
+                this.Log.Error(() => "Exception while capturing frame.", e);
             }
         }
     }
