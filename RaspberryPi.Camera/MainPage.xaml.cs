@@ -57,17 +57,23 @@ namespace RaspberryPi.Camera
 
         private void Current_UnhandledException(object sender, Windows.UI.Xaml.UnhandledExceptionEventArgs e)
         {
-            throw new NotImplementedException();
+            this.Log.Error(() => e.Message, e.Exception);
         }
 
         protected override async void OnNavigatedTo(NavigationEventArgs e)
         {
+            this.Log.Trace(() => "OnNavigatedTo Fired");
+
             await this.InitializeCameraAccess();
 
             var encodingProfile = MediaEncodingProfile.CreateMp4(VideoEncodingQuality.HD720p);
 
+            this.Log.Trace(() => "Created encoding profile for 720p");
+
             encodingProfile.Video.Bitrate = this.ConfigOptions.VideoCapture.Bitrate;
             encodingProfile.Video.FrameRate.Numerator = this.ConfigOptions.VideoCapture.FramesPerSecond;
+
+            this.Log.Trace(() => $"Set Video Bitrate and FPS to {this.ConfigOptions.VideoCapture.Bitrate} at {this.ConfigOptions.VideoCapture.FramesPerSecond} fps.");
 
             this.CameraAccess.CameraMediaCapture.VideoDeviceController.PrimaryUse = Windows.Media.Devices.CaptureUse.Video;
             var formats = this.CameraAccess.GetSupportedCaptureFormats();
@@ -77,21 +83,24 @@ namespace RaspberryPi.Camera
                 f.Framerate == this.ConfigOptions.VideoCapture.FramesPerSecond
             );
 
-            // TODO: Check and log.
+            this.Log.Trace(() => $"Found {formats.Count()} formats.");
+            this.Log.Trace(() => myFormat == null ? "Could not find specified capture properties in formats." : "Found capture format");
 
             await this.CameraAccess.SetCaptureFormat(myFormat);
             this.CameraAccess.SetEncodingProflie(encodingProfile);
 
+            // TODO: Set better logging steps.
+
+            this.Log.Trace("Starting capture loop...");
             // NOTE: Don't await these.
             this.VideoCaptureLoop();
+
+            this.Log.Trace("Starting HttpServer...");
             this.StartHttpServer();
 
-            //await this.CameraAccess.CameraMediaCapture.StartRecordToStorageFileAsync(encodingProfile, file);
-
+            this.Log.Trace("Starting Video Preview Service...");
             this.CameraAccess.CameraFrameReader.AcquisitionMode = Windows.Media.Capture.Frames.MediaFrameReaderAcquisitionMode.Realtime;
             await this.CameraAccess.CameraFrameReader.StartAsync();
-
-            //this.StartCaptureLoop();
         }
 
         private async Task VideoCaptureLoop()
@@ -103,6 +112,7 @@ namespace RaspberryPi.Camera
 
             await this.CameraAccess.StartCaptureToFileAsync(file);
 
+            // TODO: Make this configurable.
             Task.Delay(30 * 1000)
                 .ContinueWith(async (t) =>
                 {
