@@ -48,6 +48,24 @@ namespace RaspberryPi.Camera.Capture
         {
             this.CameraMediaCapture = new MediaCapture();
             this.Log = log;
+
+            this.CameraMediaCapture.Failed += CameraMediaCapture_Failed;
+            
+        }
+
+        private void CameraMediaCapture_CaptureDeviceExclusiveControlStatusChanged(MediaCapture sender, MediaCaptureDeviceExclusiveControlStatusChangedEventArgs args)
+        {
+            this.Log.Debug(() => $"CameraMediaCapture exclusive controle state changed to {args.Status}");
+        }
+
+        private void CameraMediaCapture_CameraStreamStateChanged(MediaCapture sender, object args)
+        {
+            this.Log.Debug(() => $"CameraMediaCapture state changed to {sender.CameraStreamState.ToString()}");
+        }
+
+        private void CameraMediaCapture_Failed(MediaCapture sender, MediaCaptureFailedEventArgs errorEventArgs)
+        {
+            this.Log.Error(() => $"CameraMediaCapture Exception: {errorEventArgs.Message}", null, (c) => c.AddVariable("ErrorCode", errorEventArgs.Code.ToString()));
         }
 
         public async Task<DeviceInformation> GetDefaultCamera()
@@ -62,17 +80,19 @@ namespace RaspberryPi.Camera.Capture
             await this.CameraMediaCapture.InitializeAsync(new MediaCaptureInitializationSettings()
             {
                 VideoDeviceId = camera.Id,
-
                 // Use Cpu so we get Software capture and not D3D objects that I don't know how to use.
                 MemoryPreference = MediaCaptureMemoryPreference.Auto,
-
                 MediaCategory = MediaCategory.Other,
-
-                AudioProcessing = Windows.Media.AudioProcessing.Default
+                AudioProcessing = Windows.Media.AudioProcessing.Default,
+                SharingMode = MediaCaptureSharingMode.ExclusiveControl,
+                StreamingCaptureMode = StreamingCaptureMode.AudioAndVideo
             }).AsTask().ConfigureAwait(false);
 
+            this.CameraMediaCapture.CameraStreamStateChanged += CameraMediaCapture_CameraStreamStateChanged;
+            this.CameraMediaCapture.CaptureDeviceExclusiveControlStatusChanged += CameraMediaCapture_CaptureDeviceExclusiveControlStatusChanged;
+
             // TODO: Create this from the actual frame source.
-            this.CameraFrameReader = await this.CameraMediaCapture.CreateFrameReaderAsync(this.CameraMediaCapture.FrameSources.Where(fs => fs.Value.SupportedFormats.Count > 1).First().Value);
+            //this.CameraFrameReader = await this.CameraMediaCapture.CreateFrameReaderAsync(this.CameraMediaCapture.FrameSources.Where(fs => fs.Value.SupportedFormats.Count > 1).First().Value);
         }
 
         private async Task<DeviceInformationCollection> GetCameraDevices()
@@ -92,6 +112,10 @@ namespace RaspberryPi.Camera.Capture
                     // TODO: dispose managed state (managed objects).
                     this.CameraFrameReader?.StopAsync().AsTask().Wait();
                     this.CameraFrameReader?.Dispose();
+
+                    this.CameraMediaCapture.CameraStreamStateChanged -= CameraMediaCapture_CameraStreamStateChanged;
+                    this.CameraMediaCapture.CaptureDeviceExclusiveControlStatusChanged -= CameraMediaCapture_CaptureDeviceExclusiveControlStatusChanged;
+                    this.CameraMediaCapture.Failed -= CameraMediaCapture_Failed;
 
                     // TODO: Flag if we were recording or not.
                     this.CameraMediaCapture.StopRecordAsync().AsTask().Wait();
