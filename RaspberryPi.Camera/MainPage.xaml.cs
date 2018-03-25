@@ -76,7 +76,12 @@ namespace RaspberryPi.Camera
             encodingProfile.Video.Bitrate = this.ConfigOptions.VideoCapture.Bitrate;
             encodingProfile.Video.FrameRate.Numerator = this.ConfigOptions.VideoCapture.FramesPerSecond;
 
+            //encodingProfile.Audio.Bitrate = 64 * 1000;
+
             this.Log.Trace(() => $"Set Video Bitrate and FPS to {this.ConfigOptions.VideoCapture.Bitrate} at {this.ConfigOptions.VideoCapture.FramesPerSecond} fps.");
+            this.Log.Debug(() => $"CameraAccess: {(this.CameraAccess == null ? "is null" : "is not null")}");
+            this.Log.Debug(() => $"CameraAccess.CameraMediaCapture: {(this.CameraAccess?.CameraMediaCapture == null ? "is null" : "is not null")}");
+            this.Log.Debug(() => $"CameraAccess.CameraMediaCapture.VideoDeviceController: {(this.CameraAccess?.CameraMediaCapture?.VideoDeviceController == null ? "is null" : "is not null")}");
 
             this.CameraAccess.CameraMediaCapture.VideoDeviceController.PrimaryUse = Windows.Media.Devices.CaptureUse.Video;
             var formats = this.CameraAccess.GetSupportedCaptureFormats();
@@ -85,6 +90,8 @@ namespace RaspberryPi.Camera
                 f.Width == this.ConfigOptions.VideoCapture.Width &&
                 f.Framerate == this.ConfigOptions.VideoCapture.FramesPerSecond
             );
+
+            var audioEncodings = this.CameraAccess.CameraMediaCapture.AudioDeviceController.GetAvailableMediaStreamProperties(Windows.Media.Capture.MediaStreamType.Audio);
 
             this.Log.Trace(() => $"Found {formats.Count()} formats.");
             this.Log.Debug(() => myFormat == null ? "Could not find specified capture properties in formats." : "Found capture format");
@@ -105,7 +112,7 @@ namespace RaspberryPi.Camera
                 {
                     this.Log.Error(() => "Exception while starting Video Loop", t.Exception);
                 }
-            });
+            }).AsAsyncAction().AsTask().ConfigureAwait(false);
 
             this.Log.Debug(() => "Starting HttpServer...");
             this.StartHttpServer().ContinueWith((t) =>
@@ -119,7 +126,7 @@ namespace RaspberryPi.Camera
                 {
                     this.Log.Error(() => "Exception while starting Http Server.", t.Exception);
                 }
-            });
+            }).AsAsyncAction().AsTask().ConfigureAwait(false);
 
             this.Log.Debug(() => "Starting Video Preview Service...");
             this.CameraAccess.CameraFrameReader.AcquisitionMode = Windows.Media.Capture.Frames.MediaFrameReaderAcquisitionMode.Realtime;
@@ -131,12 +138,12 @@ namespace RaspberryPi.Camera
             // TODO: Allow for camera names.
             string fileName = $"{DateTime.Now.ToString("yyyy-MM-dd_hh-mm-ss")}_camera1.mp4";
             var storageFolder = Windows.Storage.ApplicationData.Current.LocalFolder;
-            var file = await storageFolder.CreateFileAsync(fileName, Windows.Storage.CreationCollisionOption.ReplaceExisting);
+            var file = await storageFolder.CreateFileAsync(fileName, Windows.Storage.CreationCollisionOption.ReplaceExisting).AsTask().ConfigureAwait(false);
 
             await this.CameraAccess.StartCaptureToFileAsync(file).ConfigureAwait(false);
 
             // TODO: Make this configurable.
-            Task.Delay(30 * 1000)
+            Task.Delay(10 * 1000)
                 .ContinueWith(async (t) =>
                 {
                     await this.CameraAccess.StopCapture().ConfigureAwait(false);

@@ -99,7 +99,7 @@ namespace RaspberryPi.Camera.Logging
 
         public void Error(Func<string> messageGenerator, Exception exc, Action<ILogContext> extraInfo = null)
         {
-            this.Log(LoggingLevel.Error, messageGenerator, null, extraInfo);
+            this.Log(LoggingLevel.Error, messageGenerator, exc, extraInfo);
         }
 
         public void Info(Func<string> messageGenerator, Action<ILogContext> extraInfo = null)
