@@ -48,6 +48,24 @@ namespace RaspberryPi.Camera.Capture
         {
             this.CameraMediaCapture = new MediaCapture();
             this.Log = log;
+
+            this.CameraMediaCapture.Failed += CameraMediaCapture_Failed;
+            
+        }
+
+        private void CameraMediaCapture_CaptureDeviceExclusiveControlStatusChanged(MediaCapture sender, MediaCaptureDeviceExclusiveControlStatusChangedEventArgs args)
+        {
+            this.Log.Debug(() => $"CameraMediaCapture exclusive controle state changed to {args.Status}");
+        }
+
+        private void CameraMediaCapture_CameraStreamStateChanged(MediaCapture sender, object args)
+        {
+            this.Log.Debug(() => $"CameraMediaCapture state changed to {sender.CameraStreamState.ToString()}");
+        }
+
+        private void CameraMediaCapture_Failed(MediaCapture sender, MediaCaptureFailedEventArgs errorEventArgs)
+        {
+            this.Log.Error(() => $"CameraMediaCapture Exception: {errorEventArgs.Message}", null, (c) => c.AddVariable("ErrorCode", errorEventArgs.Code.ToString()));
         }
 
         public async Task<DeviceInformation> GetDefaultCamera()
@@ -62,13 +80,19 @@ namespace RaspberryPi.Camera.Capture
             await this.CameraMediaCapture.InitializeAsync(new MediaCaptureInitializationSettings()
             {
                 VideoDeviceId = camera.Id,
-
                 // Use Cpu so we get Software capture and not D3D objects that I don't know how to use.
-                MemoryPreference = MediaCaptureMemoryPreference.Cpu
-            });
+                MemoryPreference = MediaCaptureMemoryPreference.Auto,
+                MediaCategory = MediaCategory.Other,
+                AudioProcessing = Windows.Media.AudioProcessing.Default,
+                SharingMode = MediaCaptureSharingMode.ExclusiveControl,
+                StreamingCaptureMode = StreamingCaptureMode.AudioAndVideo
+            }).AsTask().ConfigureAwait(false);
+
+            this.CameraMediaCapture.CameraStreamStateChanged += CameraMediaCapture_CameraStreamStateChanged;
+            this.CameraMediaCapture.CaptureDeviceExclusiveControlStatusChanged += CameraMediaCapture_CaptureDeviceExclusiveControlStatusChanged;
 
             // TODO: Create this from the actual frame source.
-            this.CameraFrameReader = await this.CameraMediaCapture.CreateFrameReaderAsync(this.CameraMediaCapture.FrameSources.First().Value);
+            //this.CameraFrameReader = await this.CameraMediaCapture.CreateFrameReaderAsync(this.CameraMediaCapture.FrameSources.Where(fs => fs.Value.SupportedFormats.Count > 1).First().Value);
         }
 
         private async Task<DeviceInformationCollection> GetCameraDevices()
@@ -88,6 +112,10 @@ namespace RaspberryPi.Camera.Capture
                     // TODO: dispose managed state (managed objects).
                     this.CameraFrameReader?.StopAsync().AsTask().Wait();
                     this.CameraFrameReader?.Dispose();
+
+                    this.CameraMediaCapture.CameraStreamStateChanged -= CameraMediaCapture_CameraStreamStateChanged;
+                    this.CameraMediaCapture.CaptureDeviceExclusiveControlStatusChanged -= CameraMediaCapture_CaptureDeviceExclusiveControlStatusChanged;
+                    this.CameraMediaCapture.Failed -= CameraMediaCapture_Failed;
 
                     // TODO: Flag if we were recording or not.
                     this.CameraMediaCapture.StopRecordAsync().AsTask().Wait();
@@ -117,9 +145,35 @@ namespace RaspberryPi.Camera.Capture
         }
         #endregion
 
+        // TODO: Some day, this needs to be _per capture device_ and _per frame source_.
+
         public List<CaptureFormatInfo> GetSupportedCaptureFormats()
         {
-            return this.CameraMediaCapture.FrameSources.First().Value.SupportedFormats
+            this.Log.Trace(() => "GetSupportedCaptureFormats called.");
+            this.Log.Debug(() => $"FrameSources found: {this.CameraMediaCapture.FrameSources.Count}");
+            
+            /*
+            foreach (var fs in this.CameraMediaCapture.FrameSources)
+            {
+                this.Log.Debug(() => $"FrameSource {(fs.Value == null ? "is null" : "is not null")}");
+                this.Log.Debug(() => $"FrameSource: {fs.Key}");
+                this.Log.Debug(() => $"FrameSource: {fs.Value.SupportedFormats.Count}");
+
+                foreach (var format in fs.Value.SupportedFormats)
+                {
+                    if (format.FrameRate.Denominator == 0)
+                    {
+                        this.Log.Debug(() => $"Bad framerate found, numerator={format.FrameRate.Numerator} denominator={format.FrameRate.Denominator}");
+                        continue;
+                    }
+
+                    double framerate = (format.FrameRate.Numerator / format.FrameRate.Denominator);
+                    this.Log.Debug(() => $"{fs.Key}: {format.VideoFormat.Width}x{format.VideoFormat.Height}@{Math.Round(framerate, 3)}fps {format.Subtype}");
+                }
+            }
+            */
+
+            return this.CameraMediaCapture.FrameSources.Where(fs => fs.Value.SupportedFormats.Count > 1).First().Value.SupportedFormats
                     .Select(format => new CaptureFormatInfo()
                     {
                         Width = format.VideoFormat.Width,
@@ -133,6 +187,7 @@ namespace RaspberryPi.Camera.Capture
         {
             var frameSource = this.CameraMediaCapture
                 .FrameSources
+                .Where(fs => fs.Value.SupportedFormats.Count > 1)
                 .First()
                 .Value;
 
@@ -142,18 +197,18 @@ namespace RaspberryPi.Camera.Capture
 
             if (format != null)
             {
-                await frameSource.SetFormatAsync(format);
+                await frameSource.SetFormatAsync(format).AsTask().ConfigureAwait(false);
             }
         }
 
         public async Task StartCaptureToFileAsync(IStorageFile file)
         {
-            await this.CameraMediaCapture.StartRecordToStorageFileAsync(this.EncodingProfile, file);
+            await this.CameraMediaCapture.StartRecordToStorageFileAsync(this.EncodingProfile, file).AsTask().ConfigureAwait(false);
         }
 
         public async Task StopCapture()
         {
-            await this.CameraMediaCapture.StopRecordAsync();
+            await this.CameraMediaCapture.StopRecordAsync().AsTask().ConfigureAwait(false);
         }
 
         public void SetEncodingProflie(MediaEncodingProfile encodingProfile)
@@ -167,6 +222,7 @@ namespace RaspberryPi.Camera.Capture
             {
                 using (var ms = new InMemoryRandomAccessStream())
                 {
+                    SoftwareBitmap bitmap = null;
                     var propertySet = new Windows.Graphics.Imaging.BitmapPropertySet();
                     var qualityValue = new Windows.Graphics.Imaging.BitmapTypedValue(
                         0.5, // Quality percentage.
@@ -176,21 +232,40 @@ namespace RaspberryPi.Camera.Capture
 
                     var frameReference = this.CameraFrameReader.TryAcquireLatestFrame();
                     var frame = frameReference?.VideoMediaFrame?.SoftwareBitmap;
-                    
+                    this.CameraFrameReader.AcquisitionMode = MediaFrameReaderAcquisitionMode.Realtime;
+
                     if (frame == null)
+                    {
+                        var surface = frameReference?.VideoMediaFrame?.Direct3DSurface;
+                        if (surface != null)
+                        {
+                            bitmap = await SoftwareBitmap.CreateCopyFromSurfaceAsync(surface, BitmapAlphaMode.Ignore).AsTask().ConfigureAwait(false);
+
+                            // JPEG Encoder no likey YUY2.
+                            if (bitmap.BitmapPixelFormat != BitmapPixelFormat.Bgra8)
+                            {
+                                bitmap = SoftwareBitmap.Convert(bitmap, BitmapPixelFormat.Bgra8, BitmapAlphaMode.Ignore);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        bitmap = SoftwareBitmap.Convert(frame, BitmapPixelFormat.Bgra8, BitmapAlphaMode.Ignore);
+                    }
+
+                    if (bitmap == null)
                     {
                         return;
                     }
 
-                    using (var bitmap = SoftwareBitmap.Convert(frame, BitmapPixelFormat.Bgra8, BitmapAlphaMode.Ignore))
+                    using (bitmap)
                     {
                         var jpegEncoder = await BitmapEncoder.CreateAsync(BitmapEncoder.JpegEncoderId, ms, propertySet).AsTask().ConfigureAwait(false);
-
                         jpegEncoder.SetSoftwareBitmap(bitmap);
 
                         // No thumbnail for just "streaming".
                         //jpegEncoder.IsThumbnailGenerated = false;
-                        
+
                         try
                         {
                             await jpegEncoder.FlushAsync().AsTask().ConfigureAwait(false);

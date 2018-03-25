@@ -65,29 +65,53 @@ namespace RaspberryPi.Camera
 
         protected override async void OnNavigatedTo(NavigationEventArgs e)
         {
+            VideoEncodingQuality quality = VideoEncodingQuality.Auto;
             this.Log.Trace(() => "OnNavigatedTo Fired");
 
             await this.InitializeCameraAccess().ConfigureAwait(false);
 
-            var encodingProfile = MediaEncodingProfile.CreateMp4(VideoEncodingQuality.HD720p);
+            if (this.ConfigOptions.VideoCapture.Height < 720)
+            {
+                // TODO: Check for aspect ratio, this could be wvga.
+                quality = VideoEncodingQuality.Vga;
+            }
+            else if (this.ConfigOptions.VideoCapture.Height >= 720 && this.ConfigOptions.VideoCapture.Height < 1080)
+            {
+                quality = VideoEncodingQuality.HD720p;
+            }
+            else
+            {
+                quality = VideoEncodingQuality.HD1080p;
+            }
 
-            this.Log.Trace(() => "Created encoding profile for 720p");
+            var encodingProfile = MediaEncodingProfile.CreateMp4(quality);
+
+            this.Log.Trace(() => $"Created encoding profile for {quality.ToString()}");
 
             encodingProfile.Video.Bitrate = this.ConfigOptions.VideoCapture.Bitrate;
-            encodingProfile.Video.FrameRate.Numerator = this.ConfigOptions.VideoCapture.FramesPerSecond;
+            encodingProfile.Video.FrameRate.Numerator = 2;// this.ConfigOptions.VideoCapture.FramesPerSecond;
+            
+            // Set this lower for now. Looks like anything lower than 96k isn't supported.
+            // Didn't try 44.1k sampling, /shrug.
+            //encodingProfile.Audio = AudioEncodingProperties.CreateAac(48000, 1, 96000);
 
             this.Log.Trace(() => $"Set Video Bitrate and FPS to {this.ConfigOptions.VideoCapture.Bitrate} at {this.ConfigOptions.VideoCapture.FramesPerSecond} fps.");
+            this.Log.Debug(() => $"CameraAccess: {(this.CameraAccess == null ? "is null" : "is not null")}");
+            this.Log.Debug(() => $"CameraAccess.CameraMediaCapture: {(this.CameraAccess?.CameraMediaCapture == null ? "is null" : "is not null")}");
+            this.Log.Debug(() => $"CameraAccess.CameraMediaCapture.VideoDeviceController: {(this.CameraAccess?.CameraMediaCapture?.VideoDeviceController == null ? "is null" : "is not null")}");
 
             this.CameraAccess.CameraMediaCapture.VideoDeviceController.PrimaryUse = Windows.Media.Devices.CaptureUse.Video;
+
             var formats = this.CameraAccess.GetSupportedCaptureFormats();
             var myFormat = formats.FirstOrDefault(f =>
                 f.Height == this.ConfigOptions.VideoCapture.Height &&
                 f.Width == this.ConfigOptions.VideoCapture.Width &&
-                f.Framerate == this.ConfigOptions.VideoCapture.FramesPerSecond
+                f.Framerate == 5 &&
+                f.Subtype == "MJPG"
             );
 
             this.Log.Trace(() => $"Found {formats.Count()} formats.");
-            this.Log.Debug(() => myFormat == null ? "Could not find specified capture properties in formats." : "Found capture format");
+            this.Log.Debug(() => myFormat == null ? "Could not find specified capture properties in formats." : $"Found capture format, {myFormat.Subtype}");
 
             await this.CameraAccess.SetCaptureFormat(myFormat).ConfigureAwait(false);
             this.CameraAccess.SetEncodingProflie(encodingProfile);
@@ -105,25 +129,28 @@ namespace RaspberryPi.Camera
                 {
                     this.Log.Error(() => "Exception while starting Video Loop", t.Exception);
                 }
-            });
+            }).AsAsyncAction().AsTask().ConfigureAwait(false);
 
-            this.Log.Debug(() => "Starting HttpServer...");
-            this.StartHttpServer().ContinueWith((t) =>
+            if (false)
             {
-                if (t.IsCompletedSuccessfully)
+                this.Log.Debug(() => "Starting HttpServer...");
+                this.StartHttpServer().ContinueWith((t) =>
                 {
-                    this.Log.Debug(() => "Http Server started.");
-                }
+                    if (t.IsCompletedSuccessfully)
+                    {
+                        this.Log.Debug(() => "Http Server started.");
+                    }
 
-                if (t.IsFaulted)
-                {
-                    this.Log.Error(() => "Exception while starting Http Server.", t.Exception);
-                }
-            });
+                    if (t.IsFaulted)
+                    {
+                        this.Log.Error(() => "Exception while starting Http Server.", t.Exception);
+                    }
+                }).AsAsyncAction().AsTask().ConfigureAwait(false);
 
-            this.Log.Debug(() => "Starting Video Preview Service...");
-            this.CameraAccess.CameraFrameReader.AcquisitionMode = Windows.Media.Capture.Frames.MediaFrameReaderAcquisitionMode.Realtime;
-            await this.CameraAccess.CameraFrameReader.StartAsync().AsTask().ConfigureAwait(false);
+                this.Log.Debug(() => "Starting Video Preview Service...");
+                this.CameraAccess.CameraFrameReader.AcquisitionMode = Windows.Media.Capture.Frames.MediaFrameReaderAcquisitionMode.Realtime;
+                await this.CameraAccess.CameraFrameReader.StartAsync().AsTask().ConfigureAwait(false);
+            }
         }
 
         private async Task VideoCaptureLoop()
@@ -131,7 +158,7 @@ namespace RaspberryPi.Camera
             // TODO: Allow for camera names.
             string fileName = $"{DateTime.Now.ToString("yyyy-MM-dd_hh-mm-ss")}_camera1.mp4";
             var storageFolder = Windows.Storage.ApplicationData.Current.LocalFolder;
-            var file = await storageFolder.CreateFileAsync(fileName, Windows.Storage.CreationCollisionOption.ReplaceExisting);
+            var file = await storageFolder.CreateFileAsync(fileName, Windows.Storage.CreationCollisionOption.ReplaceExisting).AsTask().ConfigureAwait(false);
 
             await this.CameraAccess.StartCaptureToFileAsync(file).ConfigureAwait(false);
 
