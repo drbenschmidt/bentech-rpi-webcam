@@ -1,4 +1,5 @@
-﻿using RaspberryPi.Camera.Logging;
+﻿using RaspberryPi.Camera.Http.Pipeline;
+using RaspberryPi.Camera.Logging;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -37,6 +38,7 @@ namespace RaspberryPi.Camera.Http
         private ILogService Log;
         private StreamSocketListener SocketListener;
         private List<HttpRoute> Routes;
+        private List<IPipeline> Pipelines = new List<IPipeline>();
 
         public HttpServer(uint boundPort, ILogService log)
         {
@@ -82,7 +84,21 @@ namespace RaspberryPi.Camera.Http
                 {
                     await foundRoute.TryExecuteAsync(context).ConfigureAwait(false);
                 }
-                else
+
+                if (!response.IsHandled)
+                {
+                    foreach (var pipeline in this.Pipelines)
+                    {
+                        if (response.IsHandled)
+                        {
+                            break;
+                        }
+
+                        pipeline.Execute(context);
+                    }
+                }
+
+                if (!response.IsHandled)
                 {
                     // 404 for now.
                     context.Response.HttpCode = 404;
@@ -93,7 +109,7 @@ namespace RaspberryPi.Camera.Http
                 if (response != null && !response.HasSentResponse)
                 {
                     response.HttpCode = 500;
-                    response.SetPayload("An error has occured.");
+                    await response.WritePayloadAsync("An error has occured.").ConfigureAwait(false);
                 }
 
                 this.Log.Error(() => "Exception in HttpServer.", e);
@@ -102,10 +118,12 @@ namespace RaspberryPi.Camera.Http
             finally
             {
                 await response.FlushAsync().ConfigureAwait(false);
-                
+
                 args.Socket.InputStream.Dispose();
                 args.Socket.OutputStream.Dispose();
                 args.Socket.Dispose();
+
+                // TODO: Dispose context.
             }
         }
     }

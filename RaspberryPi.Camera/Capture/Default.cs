@@ -81,7 +81,7 @@ namespace RaspberryPi.Camera.Capture
             {
                 VideoDeviceId = camera.Id,
                 // Use Cpu so we get Software capture and not D3D objects that I don't know how to use.
-                MemoryPreference = MediaCaptureMemoryPreference.Auto,
+                MemoryPreference = MediaCaptureMemoryPreference.Cpu,
                 MediaCategory = MediaCategory.Other,
                 AudioProcessing = Windows.Media.AudioProcessing.Default,
                 SharingMode = MediaCaptureSharingMode.ExclusiveControl,
@@ -92,7 +92,7 @@ namespace RaspberryPi.Camera.Capture
             this.CameraMediaCapture.CaptureDeviceExclusiveControlStatusChanged += CameraMediaCapture_CaptureDeviceExclusiveControlStatusChanged;
 
             // TODO: Create this from the actual frame source.
-            //this.CameraFrameReader = await this.CameraMediaCapture.CreateFrameReaderAsync(this.CameraMediaCapture.FrameSources.Where(fs => fs.Value.SupportedFormats.Count > 1).First().Value);
+            this.CameraFrameReader = await this.CameraMediaCapture.CreateFrameReaderAsync(this.CameraMediaCapture.FrameSources.Where(fs => fs.Value.SupportedFormats.Count > 1).First().Value);
         }
 
         private async Task<DeviceInformationCollection> GetCameraDevices()
