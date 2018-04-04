@@ -1,4 +1,5 @@
-﻿using RaspberryPi.Camera.Logging;
+﻿using RaspberryPi.Camera.Http.Handler;
+using RaspberryPi.Camera.Logging;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -12,187 +13,6 @@ using Windows.Storage.Streams;
 
 namespace RaspberryPi.Camera.Http
 {
-    public class HttpRoute
-    {
-        public string Route { get; internal set; }
-        private Action<HttpContext> Handler;
-
-        public HttpRoute(string route, Action<HttpContext> handler)
-        {
-            this.Handler = handler;
-            this.Route = route;
-        }
-
-        public bool IsMatch(HttpRequest request)
-        {
-            return (request.Path == this.Route);
-        }
-
-        public async Task TryExecuteAsync(HttpContext context)
-        {
-            try
-            {
-                await Task.Factory.StartNew(() =>
-                {
-                    this.Handler.Invoke(context);
-                }).ConfigureAwait(false);
-            }
-            catch (Exception e)
-            {
-                // TODO: Add generic handlers and responses.
-                // TODO: Add ability to log in HttpContext.
-            }
-        }
-    }
-
-    public class HttpHeader
-    {
-        public string Name { get; set; }
-        public string Value { get; set; }
-
-        public HttpHeader(string name, string value)
-        {
-            this.Name = name;
-            this.Value = value;
-        }
-
-        public string ToOutputString()
-        {
-            return $"{this.Name}: {this.Value}";
-        }
-    }
-
-    public class HttpHeaderCollection : Dictionary<string, string>
-    {
-        public int? ContentLength
-        {
-            get
-            {
-                return this.GetIntHeader("Content-Length");
-            }
-        }
-
-        public string ContentType
-        {
-            get
-            {
-                return this.GetStringHeader("Content-Type");
-            }
-        }
-
-        public HttpHeaderCollection()
-        {
-
-        }
-
-        public HttpHeaderCollection(IEnumerable<string> headers)
-        {
-            foreach (string header in headers)
-            {
-                string[] parts = header.Split(':');
-                this.Add(parts[0], parts[1].TrimStart(' '));
-            }
-        }
-
-        public string ToHeaderString()
-        {
-            StringBuilder result = new StringBuilder();
-
-            foreach (var header in this)
-            {
-                result.AppendLine(header.Key + ": " + header.Value);
-            }
-
-            return result.ToString();
-        }
-
-        private int? GetIntHeader(string header)
-        {
-            if (this.ContainsKey(header))
-            {
-                string value = this[header];
-                return Int32.Parse(value);
-            }
-
-            return null;
-        }
-
-        private string GetStringHeader(string header)
-        {
-            if (this.ContainsKey(header))
-            {
-                return this[header];
-            }
-
-            return null;
-        }
-    }
-
-    public class HttpResponse
-    {
-        private StreamSocket Socket;
-        private IOutputStream OutputStream;
-        public HttpHeaderCollection Headers { get; internal set; }
-        public int HttpCode { get; internal set; }
-        public string Content { get; set; }
-        public byte[] BinaryContent { get; set; }
-        public string HttpVersion { get; set; }
-        public string ReasonPhrase { get; set; }
-
-        public HttpResponse(StreamSocket socket)
-        {
-            this.Socket = socket;
-            this.OutputStream = socket.OutputStream;
-            this.Headers = new HttpHeaderCollection();
-            this.ReasonPhrase = "OK";
-            this.HttpVersion = "HTTP/1.1";
-        }
-
-        public async Task FlushAsync()
-        {
-            var stream = this.OutputStream.AsStreamForWrite();
-
-            string payload = $"{this.HttpVersion} {this.HttpCode} {this.ReasonPhrase}\r\n";
-
-            payload += this.Headers.ToHeaderString();
-
-            if (!String.IsNullOrWhiteSpace(this.Content) && this.BinaryContent == null)
-            {
-                payload += $"Content-Length: {this.Content.Length}\r\n\r\n";
-
-                payload += this.Content;
-
-                // Write the body out.
-                await stream.WriteStringAsync(payload).ConfigureAwait(false);
-            }
-            else if (this.BinaryContent != null)
-            {
-                payload += $"Content-Length: {this.BinaryContent.Length}\r\n\r\n";
-
-                await stream.WriteStringAsync(payload).ConfigureAwait(false);
-
-                // Send the headers.
-                await stream.FlushAsync().ConfigureAwait(false);
-
-                // Write the content.
-                await stream.WriteAsync(this.BinaryContent, 0, this.BinaryContent.Length).ConfigureAwait(false);
-            }
-            
-            await stream.FlushAsync().ConfigureAwait(false);
-        }
-
-        // TODO: Just make the string encoded binary content dummy.
-        public void SetPayload(string message)
-        {
-            this.Content = message;
-        }
-
-        public void SetPayload(byte[] bytes)
-        {
-            this.BinaryContent = bytes;
-        }
-    }
-
     public static class StreamExtensions
     {
         public static async Task WriteStringAsync(this Stream stream, string str)
@@ -212,84 +32,13 @@ namespace RaspberryPi.Camera.Http
         DEBUG
     }
 
-    public class HttpRequest
-    {
-        public HttpRequestMethod Method { get; set; }
-        public string HttpVersion { get; set; }
-        public string Path { get; set; }
-        public List<string> RawHeaders { get; set; }
-        public string QueryString { get; set; }
-
-        private HttpRequest(string request)
-        {
-            // TODO: Actually parse the headers.
-            this.Path = "/";
-        }
-
-        private HttpRequest(List<string> headers)
-        {
-            string rawFirstLine = headers.First();
-
-            string[] actionParts = rawFirstLine.Split(' ');
-
-            this.Method = (HttpRequestMethod)Enum.Parse(typeof(HttpRequestMethod), actionParts[0]);
-            this.Path = actionParts[1];
-            this.HttpVersion = actionParts[2];
-
-            if (this.Path.Contains('?'))
-            {
-                string[] pathParts = this.Path.Split('?');
-                this.Path = pathParts[0];
-                this.QueryString = pathParts[1];
-            }
-
-            this.RawHeaders = headers.Skip(1).ToList();
-        }
-
-        public static async Task<HttpRequest> FromStreamSocketAsync(StreamSocket socket)
-        {
-            var inputStream = socket.InputStream;
-
-            // TODO: Make size this configurable.
-            using (var test = new StreamReader(socket.InputStream.AsStreamForRead(2048)))
-            {
-                var t = await ReadRequestHeaders(test).ConfigureAwait(false);
-                return new HttpRequest(t);
-            }
-        }
-
-        private static async Task<List<string>> ReadRequestHeaders(StreamReader reader)
-        {
-            var request = new List<string>();
-
-            string line = null;
-            while ((line = await reader.ReadLineAsync()) != String.Empty)
-            {
-                request.Add(line);
-            }
-
-            return request;
-        }
-    }
-
-    public class HttpContext
-    {
-        public HttpRequest Request { get; internal set; }
-        public HttpResponse Response { get; internal set; }
-
-        public HttpContext(HttpRequest request, HttpResponse response)
-        {
-            this.Request = request;
-            this.Response = response;
-        }
-    }
-
     public class HttpServer
     {
         private uint BoundPort;
         private ILogService Log;
         private StreamSocketListener SocketListener;
         private List<HttpRoute> Routes;
+        private List<IHttpRequestHandler> HttpHandlers = new List<IHttpRequestHandler>();
 
         public HttpServer(uint boundPort, ILogService log)
         {
@@ -304,6 +53,11 @@ namespace RaspberryPi.Camera.Http
             this.SocketListener.Control.QualityOfService = SocketQualityOfService.LowLatency;
         }
 
+        public void AddHttpHandler(IHttpRequestHandler handler)
+        {
+            this.HttpHandlers.Add(handler);
+        }
+
         public void AddRoute(HttpRoute route)
         {
             // TODO: Make sure there aren't conflicting routes.
@@ -312,7 +66,6 @@ namespace RaspberryPi.Camera.Http
 
         public async Task Start()
         {
-            //await this.SocketListener.BindEndpointAsync(new Windows.Networking.HostName("192.168.1.64"), "9092").AsTask().ConfigureAwait(false);
             await this.SocketListener.BindServiceNameAsync(this.BoundPort.ToString()).AsTask().ConfigureAwait(false);
         }
 
@@ -328,7 +81,6 @@ namespace RaspberryPi.Camera.Http
                 request = await HttpRequest.FromStreamSocketAsync(socket).ConfigureAwait(false);
                 response = new HttpResponse(socket);
                 var context = new HttpContext(request, response);
-                // TODO: Add pipelines, better support for files, etc.
 
                 var foundRoute = this.Routes.FirstOrDefault(route => route.IsMatch(request));
 
@@ -336,7 +88,21 @@ namespace RaspberryPi.Camera.Http
                 {
                     await foundRoute.TryExecuteAsync(context).ConfigureAwait(false);
                 }
-                else
+
+                if (!response.IsHandled)
+                {
+                    foreach (var pipeline in this.HttpHandlers)
+                    {
+                        if (response.IsHandled)
+                        {
+                            break;
+                        }
+
+                        pipeline.Execute(context);
+                    }
+                }
+
+                if (!response.IsHandled)
                 {
                     // 404 for now.
                     context.Response.HttpCode = 404;
@@ -344,16 +110,24 @@ namespace RaspberryPi.Camera.Http
             }
             catch (Exception e)
             {
+                if (response != null && !response.HasSentResponse)
+                {
+                    response.HttpCode = 500;
+                    await response.WritePayloadAsync("An error has occured.").ConfigureAwait(false);
+                }
+
                 this.Log.Error(() => "Exception in HttpServer.", e);
                 // Write appopriate response.--
             }
             finally
             {
                 await response.FlushAsync().ConfigureAwait(false);
-                //await args.Socket.OutputStream.FlushAsync().AsTask().ConfigureAwait(false);
+
                 args.Socket.InputStream.Dispose();
                 args.Socket.OutputStream.Dispose();
                 args.Socket.Dispose();
+
+                // TODO: Dispose context.
             }
         }
     }

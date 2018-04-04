@@ -1,6 +1,7 @@
 ﻿using RaspberryPi.Camera.Capture;
 using RaspberryPi.Camera.Configuration;
 using RaspberryPi.Camera.Http;
+using RaspberryPi.Camera.Http.Handler;
 using RaspberryPi.Camera.Logging;
 using RaspberryPi.Camera.Serialization;
 using System;
@@ -116,22 +117,25 @@ namespace RaspberryPi.Camera
             await this.CameraAccess.SetCaptureFormat(myFormat).ConfigureAwait(false);
             this.CameraAccess.SetEncodingProflie(encodingProfile);
 
-            this.Log.Debug(() => "Starting capture loop...");
-            // NOTE: Don't await these.
-            this.VideoCaptureLoop().ContinueWith((t) =>
+            if (true)
             {
-                if (t.IsCompletedSuccessfully)
+                this.Log.Debug(() => "Starting capture loop...");
+                // NOTE: Don't await these.
+                this.VideoCaptureLoop().ContinueWith((t) =>
                 {
-                    this.Log.Debug(() => "Video Loop started.");
-                }
-                
-                if (t.IsFaulted)
-                {
-                    this.Log.Error(() => "Exception while starting Video Loop", t.Exception);
-                }
-            }).AsAsyncAction().AsTask().ConfigureAwait(false);
+                    if (t.IsCompletedSuccessfully)
+                    {
+                        this.Log.Debug(() => "Video Loop started.");
+                    }
 
-            if (false)
+                    if (t.IsFaulted)
+                    {
+                        this.Log.Error(() => "Exception while starting Video Loop", t.Exception);
+                    }
+                }).AsAsyncAction().AsTask().ConfigureAwait(false);
+            }
+
+            if (true)
             {
                 this.Log.Debug(() => "Starting HttpServer...");
                 this.StartHttpServer().ContinueWith((t) =>
@@ -147,9 +151,12 @@ namespace RaspberryPi.Camera
                     }
                 }).AsAsyncAction().AsTask().ConfigureAwait(false);
 
-                this.Log.Debug(() => "Starting Video Preview Service...");
-                this.CameraAccess.CameraFrameReader.AcquisitionMode = Windows.Media.Capture.Frames.MediaFrameReaderAcquisitionMode.Realtime;
-                await this.CameraAccess.CameraFrameReader.StartAsync().AsTask().ConfigureAwait(false);
+                if (true)
+                {
+                    this.Log.Debug(() => "Starting Video Preview Service...");
+                    this.CameraAccess.CameraFrameReader.AcquisitionMode = Windows.Media.Capture.Frames.MediaFrameReaderAcquisitionMode.Realtime;
+                    await this.CameraAccess.CameraFrameReader.StartAsync().AsTask().ConfigureAwait(false);
+                }
             }
         }
 
@@ -207,12 +214,17 @@ namespace RaspberryPi.Camera
         private async Task StartHttpServer()
         {
             this.WebServer = new HttpServer(9092, this.Log);
-            this.WebServer.AddRoute(new HttpRoute("/", (context) =>
+
+            // Welp, looks like I'm going to start moving off into having a seperate internal app that controls the webcam devices.
+            // UWP is neat, but I'm over the limitations.
+            this.WebServer.AddHttpHandler(new StaticFileHandler(@"C:\Users\drben\AppData\Local\Packages\RaspberryPi.Camera_66zcvgjc1d4vp\LocalState\www"));
+
+            this.WebServer.AddRoute(new HttpRoute("/camera", (context) =>
             {
                 context.Response.HttpCode = 200;
                 context.Response.Headers.Add("Content-Type", "text/html; charset=utf-8");
                 context.Response.Headers.Add("Connection", "Close");
-                context.Response.SetPayload("<html><head><title>Test Page</title><script type='text/javascript'>var i = 0; setInterval(()=>{document.getElementById('preview').attributes['src'].value='/preview.jpg?a=' + i; i++;}, 250);</script></head><body><img id='preview' src='/preview.jpg' style='width:100%' /></body></html>");
+                context.Response.WritePayloadAsync("<html><head><title>Test Page</title><script type='text/javascript'>var i = 0; setInterval(()=>{document.getElementById('preview').attributes['src'].value='/preview.jpg?a=' + i; i++;}, 250);</script></head><body><img id='preview' src='/preview.jpg' style='width:100%' /></body></html>").Wait();
             }));
 
             this.WebServer.AddRoute(new HttpRoute("/preview.jpg", (context) =>
@@ -226,12 +238,20 @@ namespace RaspberryPi.Camera
 
                 if (this.CameraAccess.CapturedFrame != null)
                 {
-                    context.Response.SetPayload(this.CameraAccess.CapturedFrame.Data);
+                    context.Response.WritePayloadAsync(this.CameraAccess.CapturedFrame.Data, "image/jpeg").Wait();
                 }
                 else
                 {
                     context.Response.HttpCode = 404;
                 }
+            }));
+
+            this.WebServer.AddRoute(new HttpRoute("/test", (context) =>
+            {
+                context.Response.HttpCode = 200;
+                context.Response.Headers.Add("Content-Type", "text/html; charset=utf-8");
+                context.Response.Headers.Add("Connection", "Close");
+                context.Response.WritePayloadAsync("<html><head><title>Test Page</title></head><body><h1>This is the test route page!!</h1></body></html>").Wait();
             }));
 
             await this.WebServer.Start().ConfigureAwait(false);
