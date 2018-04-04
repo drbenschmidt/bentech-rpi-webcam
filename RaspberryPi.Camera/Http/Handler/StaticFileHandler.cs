@@ -6,18 +6,18 @@ using System.Text;
 using System.Threading.Tasks;
 using MimeTypes;
 
-namespace RaspberryPi.Camera.Http.Pipeline
+namespace RaspberryPi.Camera.Http.Handler
 {
-    public interface IPipeline
+    public interface IHttpRequestHandler
     {
         void Execute(HttpContext context);
     }
 
-    public class StaticFilePipeline : IPipeline
+    public class StaticFileHandler : IHttpRequestHandler
     {
         private string RootPath;
 
-        public StaticFilePipeline(string rootPath)
+        public StaticFileHandler(string rootPath)
         {
             this.RootPath = rootPath;
         }
@@ -30,7 +30,16 @@ namespace RaspberryPi.Camera.Http.Pipeline
             }
 
             // Resolve the path.
-            string path = Path.Combine(this.RootPath, context.Request.Path);
+            string path = this.RootPath;
+
+            if (context.Request.Path == "/")
+            {
+                path += "/index.html";
+            }
+            else
+            {
+                path = Path.Combine(this.RootPath, context.Request.Path);
+            }
 
             // If it exists, serve it up!
             if (File.Exists(path))

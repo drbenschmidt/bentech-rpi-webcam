@@ -1,6 +1,7 @@
 ﻿using RaspberryPi.Camera.Capture;
 using RaspberryPi.Camera.Configuration;
 using RaspberryPi.Camera.Http;
+using RaspberryPi.Camera.Http.Handler;
 using RaspberryPi.Camera.Logging;
 using RaspberryPi.Camera.Serialization;
 using System;
@@ -213,7 +214,12 @@ namespace RaspberryPi.Camera
         private async Task StartHttpServer()
         {
             this.WebServer = new HttpServer(9092, this.Log);
-            this.WebServer.AddRoute(new HttpRoute("/", (context) =>
+
+            // Welp, looks like I'm going to start moving off into having a seperate internal app that controls the webcam devices.
+            // UWP is neat, but I'm over the limitations.
+            this.WebServer.AddHttpHandler(new StaticFileHandler(@"C:\Users\drben\AppData\Local\Packages\RaspberryPi.Camera_66zcvgjc1d4vp\LocalState\www"));
+
+            this.WebServer.AddRoute(new HttpRoute("/camera", (context) =>
             {
                 context.Response.HttpCode = 200;
                 context.Response.Headers.Add("Content-Type", "text/html; charset=utf-8");

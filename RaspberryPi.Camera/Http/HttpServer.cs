@@ -1,4 +1,4 @@
-﻿using RaspberryPi.Camera.Http.Pipeline;
+﻿using RaspberryPi.Camera.Http.Handler;
 using RaspberryPi.Camera.Logging;
 using System;
 using System.Collections.Generic;
@@ -38,7 +38,7 @@ namespace RaspberryPi.Camera.Http
         private ILogService Log;
         private StreamSocketListener SocketListener;
         private List<HttpRoute> Routes;
-        private List<IPipeline> Pipelines = new List<IPipeline>();
+        private List<IHttpRequestHandler> HttpHandlers = new List<IHttpRequestHandler>();
 
         public HttpServer(uint boundPort, ILogService log)
         {
@@ -51,6 +51,11 @@ namespace RaspberryPi.Camera.Http
             this.SocketListener.Control.KeepAlive = false;
             this.SocketListener.Control.NoDelay = false;
             this.SocketListener.Control.QualityOfService = SocketQualityOfService.LowLatency;
+        }
+
+        public void AddHttpHandler(IHttpRequestHandler handler)
+        {
+            this.HttpHandlers.Add(handler);
         }
 
         public void AddRoute(HttpRoute route)
@@ -76,7 +81,6 @@ namespace RaspberryPi.Camera.Http
                 request = await HttpRequest.FromStreamSocketAsync(socket).ConfigureAwait(false);
                 response = new HttpResponse(socket);
                 var context = new HttpContext(request, response);
-                // TODO: Add pipelines, better support for files, etc.
 
                 var foundRoute = this.Routes.FirstOrDefault(route => route.IsMatch(request));
 
@@ -87,7 +91,7 @@ namespace RaspberryPi.Camera.Http
 
                 if (!response.IsHandled)
                 {
-                    foreach (var pipeline in this.Pipelines)
+                    foreach (var pipeline in this.HttpHandlers)
                     {
                         if (response.IsHandled)
                         {

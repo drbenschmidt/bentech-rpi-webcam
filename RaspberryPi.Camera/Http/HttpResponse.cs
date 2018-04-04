@@ -16,11 +16,28 @@ namespace RaspberryPi.Camera.Http
         private Stream PayloadStream;
 
         public HttpHeaderCollection Headers { get; internal set; }
-        public int HttpCode { get; internal set; }
+        private int _HttpCode;
+        public int HttpCode
+        {
+            get => this._HttpCode;
+            internal set
+            {
+                if (HttpResponseCodeHelper.CodeMap.ContainsKey(value))
+                {
+                    this.ReasonPhrase = HttpResponseCodeHelper.CodeMap[value];
+                }
+                else
+                {
+                    this.ReasonPhrase = null;
+                }
+
+                this._HttpCode = value;
+            }
+        }
         public string Content { get; set; }
         public MemoryStream Buffer { get; internal set; } = new MemoryStream();
         public string HttpVersion { get; set; }
-        public string ReasonPhrase { get; set; }
+        public string ReasonPhrase { get; internal set; }
 
         public bool IsHandled { get; internal set; }
         public bool HasSentResponse
@@ -41,7 +58,7 @@ namespace RaspberryPi.Camera.Http
             this.Socket = socket;
             this.OutputStream = socket.OutputStream;
             this.Headers = new HttpHeaderCollection();
-            this.ReasonPhrase = "OK";
+            this.HttpCode = 200;
             this.HttpVersion = "HTTP/1.1";
         }
 
@@ -49,7 +66,6 @@ namespace RaspberryPi.Camera.Http
         {
             var stream = this.OutputStream.AsStreamForWrite();
 
-            // TODO: Actually make this right. reason != OK all the time.
             string payload = $"{this.HttpVersion} {this.HttpCode} {this.ReasonPhrase}\r\n";
 
             if (this.PayloadStream != null)
@@ -68,6 +84,9 @@ namespace RaspberryPi.Camera.Http
             // Write headers to stream
             await stream.WriteStringAsync(payload).ConfigureAwait(false);
 
+            // TODO: Determine if we're compressing the payload, or
+            // if we should be chunking it to the client.
+
             if (this.PayloadStream != null)
             {
                 this.PayloadStream.Position = 0;
@@ -75,7 +94,6 @@ namespace RaspberryPi.Camera.Http
             }
             else
             {
-                //await stream.WriteAsync(this.Buffer.ToArray(), 0, (int)this.Buffer.Length).ConfigureAwait(false);
                 this.Buffer.Position = 0;
                 await this.Buffer.CopyToAsync(stream).ConfigureAwait(false);
             }
@@ -108,5 +126,56 @@ namespace RaspberryPi.Camera.Http
             this.PayloadStream = stream;
             this.IsHandled = true;
         }
+    }
+
+    public static class HttpResponseCodeHelper
+    {
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <see cref="https://www.w3.org/Protocols/rfc2616/rfc2616-sec6.html"/>
+        public static Dictionary<int, string> CodeMap = new Dictionary<int, string>()
+        {
+            { 100, "Continue" },
+            { 101, "Switching Protocols" },
+            { 200, "OK" },
+            { 201, "Created" },
+            { 202, "Accepted" },
+            { 203, "Non-Authoritative Information" },
+            { 204, "No Content" },
+            { 205, "Reset Content" },
+            { 206, "Partial Content" },
+            { 300, "Multiple Choices" },
+            { 301, "Moved Permanently" },
+            { 302, "Found" },
+            { 303, "See Other" },
+            { 304, "Not Modified" },
+            { 305, "Use Proxy" },
+            { 307, "Temporary Redirect" },
+            { 400, "Bad Request" },
+            { 401, "Unauthorized" },
+            { 402, "Payment Required" },
+            { 403, "Forbidden" },
+            { 404, "Not Found" },
+            { 405, "Method Not Allowed" },
+            { 406, "Not Acceptable" },
+            { 407, "Proxy Authentication Required" },
+            { 408, "Request Time-out" },
+            { 409, " Conflict" },
+            { 410, "Gone" },
+            { 411, "Length Required" },
+            { 412, "Precondition Failed" },
+            { 413, "Request Entity Too Large" },
+            { 414, "Request-URI Too Large" },
+            { 415, "Unsupported Media Type" },
+            { 416, "Requested range not satisfiable" },
+            { 417, "Expectation Failed" },
+            { 500, "Internal Server Error" },
+            { 501, "Not Implemented" },
+            { 502, "Bad Gateway" },
+            { 503, "Service Unavailable" },
+            { 504, "Gateway Time-out" },
+            { 505, "HTTP Version not supported" }
+        };
     }
 }
